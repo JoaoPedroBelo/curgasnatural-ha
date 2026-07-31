@@ -1,7 +1,9 @@
 # Development dependencies for the CUR Gás Natural integration
 # Install: pip install -r requirements-dev.txt
 
-# Include test dependencies
+# Include test dependencies (pinned to the current Home Assistant; see that file).
+# For the oldest supported Home Assistant, install requirements-test-min.txt into a
+# separate Python 3.11 venv instead - the two cannot coexist.
 -r requirements-test.txt
 
 # Linting and formatting

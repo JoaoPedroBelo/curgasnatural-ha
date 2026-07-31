@@ -5,8 +5,10 @@ The payloads mirror the shapes captured live from the portal (see
 by a placeholder — no real CUI, contract number, NIF or address.
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+import aiohttp
 import pytest
 
 from custom_components.curgasnatural.const import (
@@ -17,6 +19,36 @@ from custom_components.curgasnatural.const import (
     CONF_EMAIL,
     CONF_PASSWORD,
 )
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _start_dns_resolver_thread() -> None:
+    """Let pycares start its permanent daemon thread before tests are watched.
+
+    aiohttp resolves DNS through aiodns/pycares, and pycares destroys resolver
+    channels on a single module-level daemon thread that it starts lazily and never
+    joins — by design, see ``pycares._ChannelShutdownManager``.
+
+    ``pytest-homeassistant-custom-component``'s cleanup check diffs the thread list
+    around every test, so whichever test first builds an ``aiohttp.ClientSession``
+    gets blamed for that thread and errors at teardown. Building and closing one
+    session here, before any test is observed, keeps the diff honest.
+
+    Symptom if this is removed: `AssertionError` at the teardown of the first
+    api test, naming `Thread-1 (_run_safe_shutdown_loop)`.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        session = loop.run_until_complete(_open_session())
+        loop.run_until_complete(session.close())
+    finally:
+        loop.close()
+
+
+async def _open_session() -> aiohttp.ClientSession:
+    """Build a session on the running loop, as aiohttp requires."""
+    return aiohttp.ClientSession()
+
 
 TEST_CONTRACT_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 TEST_CONTRACT_NUMBER = "34_00000000_00000000"

@@ -1,19 +1,29 @@
-# Test dependencies for the CUR Gás Natural integration
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-homeassistant-custom-component>=0.13.0
-pytest-cov>=4.1.0
+# Test dependencies for the CUR Gás Natural integration.
+#
+# These are PINNED on purpose. `pytest-homeassistant-custom-component` ships a
+# snapshot of Home Assistant's own test harness, so it and `homeassistant` have to
+# move together — and with open ranges, CI resolves a different Home Assistant every
+# time it runs. That made local runs disagree with CI (a lingering-thread check
+# passed on one and failed on the other), which is worse than being a version behind.
+#
+# To bump: raise pytest-homeassistant-custom-component, let it pull its matching
+# homeassistant, re-freeze the rest, and run the suite. `validate.yml` runs daily
+# against current HACS/hassfest, so drift there is still caught without pinning here.
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-homeassistant-custom-component==0.13.205
+pytest-cov==6.0.0
 
-# Home Assistant
-homeassistant>=2024.1.0
+# Pulled in by pytest-homeassistant-custom-component; pinned so the pair is explicit.
+homeassistant==2025.1.4
 
 # Integration dependencies
-aiohttp>=3.9.0
-aioresponses>=0.7.6
+aiohttp==3.11.11
+aioresponses==0.7.9
 
 # Recorder dependencies. pytest-homeassistant-custom-component does not pull these
 # in, but tests/test_init.py needs a working recorder to assert the long-term
-# statistic is actually imported. Without them that whole module errors out.
-psutil-home-assistant>=0.0.1
-SQLAlchemy>=2.0.0
-fnv-hash-fast>=0.5.0
+# statistics are actually imported. Without them that whole module errors out.
+psutil-home-assistant==0.0.1
+SQLAlchemy==2.0.36
+fnv-hash-fast==1.0.2

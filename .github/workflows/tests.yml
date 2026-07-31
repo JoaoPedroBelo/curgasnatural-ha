@@ -40,12 +40,26 @@ jobs:
         continue-on-error: true
 
   test:
-    name: Run Tests
+    # Two Home Assistant versions, both pinned. The "min" job is what makes the
+    # 2024.3.0+ floor in hacs.json and the README a tested fact instead of a guess;
+    # the "current" job is what users actually run. Open version ranges were
+    # resolving a different Home Assistant on every run, which made CI disagree
+    # with local for reasons unrelated to the change under test.
+    name: Run Tests (HA ${{ matrix.label }})
     runs-on: ubuntu-latest
     needs: lint
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        include:
+          - label: "2024.3 (floor)"
+            python-version: "3.11"
+            requirements: requirements-test-min.txt
+            coverage: false
+          - label: "2025.1 (current)"
+            python-version: "3.12"
+            requirements: requirements-test.txt
+            coverage: true
 
     steps:
       - name: Checkout code
@@ -56,24 +70,27 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
-          cache-dependency-path: 'requirements-test.txt'
+          cache-dependency-path: ${{ matrix.requirements }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-test.txt
+          pip install -r ${{ matrix.requirements }}
+
+      - name: Show the resolved Home Assistant version
+        run: python -c "from homeassistant.const import __version__ as v; print('Home Assistant', v)"
 
       - name: Run tests
         run: |
           pytest tests/ -v --tb=short
 
       - name: Run tests with coverage
-        if: matrix.python-version == '3.12'
+        if: matrix.coverage
         run: |
           pytest tests/ --cov=custom_components.curgasnatural --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage reports
-        if: matrix.python-version == '3.12'
+        if: matrix.coverage
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml

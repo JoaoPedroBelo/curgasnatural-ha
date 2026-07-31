@@ -76,7 +76,18 @@ Prefer the project venv directly (`.venv/bin/...`):
 
 Or via Make: `make lint`, `make format`, `make test`, `make coverage`, `make check`.
 
-The venv must be **Python 3.11** — Home Assistant does not support 3.14.
+Test dependencies are **pinned**, and there are two sets:
+
+| File | Home Assistant | Python | Why |
+|------|----------------|--------|-----|
+| `requirements-test.txt` | 2025.1.4 | 3.12 | what users run |
+| `requirements-test-min.txt` | 2024.3.3 | 3.11 | proves the floor in `hacs.json` |
+
+CI runs both. Open version ranges used to resolve a different Home Assistant on
+every run, which made CI disagree with local — a lingering-thread check passed
+here and failed there. Never loosen them back to `>=`.
+
+The venv must match one of those rows; Home Assistant does not support 3.14.
 
 `mypy` reports one known false positive on `config_flow.py`
 (`Unexpected keyword argument "domain"`): it cannot see HA's
