@@ -5,6 +5,42 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-31
+
+### Fixed — a month no longer reports the previous month's gas
+
+The consumption statistic dated each reading's whole delta at the reading day. That
+is wrong in a way only the dashboard reveals: the Gas dashboard diffs the running
+`sum` at month boundaries, so a reading taken on 11 July carried the ~30 days of gas
+since the previous reading — two thirds of it June's — entirely into July's total.
+July reported 7 m³ against roughly 4 actually burnt in July.
+
+Consumption is now written as **one point per calendar day**: each reading's delta is
+split evenly across the days between two readings, and the meter index is
+interpolated for `state`. Reading days still land on the exact index the portal
+reported, so no gas is invented or lost — only attributed to the days it was burnt.
+
+An even split *is* an approximation, since gas use is not uniform, but a far smaller
+one than misattributing a whole month.
+
+### Changed — the polled window is rewritten, not appended to
+
+Spreading requires the days between two readings to be recomputed whenever either
+end moves, so each poll now rewrites the window the portal returns instead of
+appending to it. The running total is anchored on what is already stored for the
+**oldest** reading in that window, which keeps `sum` monotonic and leaves history
+older than the window untouched.
+
+Side effect worth having: a backdated reading arriving late now repairs the days it
+covers, instead of dumping its gas on the day it appeared.
+
+The cost series is deliberately *not* split — an invoice is a single event, not a
+daily accrual, so it stays dated at the close of the period it bills.
+
+**Upgrading:** the fix applies itself. The first poll after the update rewrites the
+whole reading window, so past months correct themselves; nothing has to be deleted
+by hand.
+
 ## [0.1.0] - 2026-07-31
 
 Initial release.
@@ -51,24 +87,6 @@ accumulated alongside it. That is what makes correcting the factor repair the wh
 history: an independently accumulated series would keep the old factor baked into
 every point already written, leaving a step in the middle that re-polling never
 fixes.
-
-### Changed — consumption is spread over the days it covers
-
-The first design dated each reading's whole delta at the reading day. That is wrong
-in a way only the dashboard reveals: the Gas dashboard diffs the running `sum` at
-month boundaries, so a reading taken on 11 July credited about 30 days of gas — two
-thirds of it June's heating — entirely to July.
-
-Statistics are now written as **one point per calendar day**, with each delta split
-evenly across the days between two readings and the meter index interpolated for
-`state`. The polled window is rewritten wholesale each time rather than appended to,
-anchored on the total already stored for its oldest reading, which also means a
-backdated reading arriving late repairs the days it covers instead of dumping its gas
-on the day it appeared.
-
-An even split is an approximation — gas use is not uniform — but a far smaller one
-than misattributing a month. The cost series is *not* split: an invoice is a single
-event, not a daily accrual, so it stays dated at the close of the period it bills.
 
 ### Added — cost from real invoices
 
