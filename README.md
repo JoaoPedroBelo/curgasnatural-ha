@@ -138,8 +138,12 @@ alongside — and prefer this integration's statistic, because a `total_increasi
 template sensor whose statistics you also inject by hand will collide with the
 recorder's own compilation and can show negative consumption after a restart.
 
-Consumption shows as one bar per meter reading, covering the period since the
-previous one — that is the full resolution this API offers.
+Consumption shows as a **daily** series. The portal only reports a meter index
+every few weeks, so each reading's delta is spread evenly over the days it covers.
+That is an approximation — gas use is not uniform — but a much smaller one than
+dating a whole month's gas at the reading day, which is what makes calendar months
+read correctly: a reading taken on 11 July carries mostly June's heating, and the
+dashboard diffs the running total at month boundaries.
 
 ## 🏷️ Entity IDs (read this before writing automations)
 

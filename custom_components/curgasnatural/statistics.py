@@ -8,19 +8,25 @@ files one, so readings are sparse and irregular.
 
 Readings are also **backdated** — a reading dated the 20th is only visible days
 later. A live ``total_increasing`` sensor would therefore attribute a whole
-month's gas to the poll hour. Instead each reading is imported as an hourly
-external statistic timestamped at that reading's **local midnight**, so the
-dashboard places the consumption on the day the meter was actually read.
+month's gas to the poll hour. Instead the readings are imported as external
+statistics timestamped at **local midnight**, so the dashboard places the
+consumption on the days the gas was actually burnt.
 
-Consequence worth knowing: consumption appears as one bar per reading, covering
-the whole period since the previous one. That is genuinely all the data there
-is — we do not spread it over the intervening days, because that would be
-invented detail.
+A reading reports the meter index for one instant but the *consumption* it
+implies belongs to the whole period since the previous reading, so each delta is
+**spread evenly over the days it covers** — one point per calendar day between
+two readings. Dating the whole delta at the reading day instead put a month of
+gas on a single day, which made calendar months read wrong: a reading taken on
+11 July carries 30 days of gas, two thirds of it June's, and the Gas dashboard
+diffs the ``sum`` at month boundaries. An even daily split is an approximation
+(gas use is not uniform), but a far smaller one than attributing June's heating
+to July.
 
-Because we re-poll a sliding window of readings, the running ``sum`` is
-continued from the last statistic already stored (queried via
-``get_last_statistics``) and only readings newer than that are appended —
-keeping ``sum`` monotonic and never re-writing history.
+The whole window is therefore **rewritten** on every poll rather than appended
+to: the running ``sum`` is anchored on the statistic already stored for the
+oldest reading in the window and recomputed from there, which also means a
+backdated reading arriving late repairs the days it covers instead of dumping
+its gas on the day it showed up.
 
 Three series are published per contract:
 
@@ -41,7 +47,8 @@ include fixed terms and VAT, which price x consumption never would.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
+from itertools import pairwise
 import logging
 from typing import Any, Final
 
@@ -92,39 +99,67 @@ def energy_statistic_id_for(contract_number: str) -> str:
 
 def build_statistic_points(
     readings: list[dict[str, Any]],
-    last_iso: str | None,
-    last_sum: float,
+    anchor_sum: float,
 ) -> list[dict[str, Any]]:
-    """Return ``[{"iso", "state", "sum"}]`` for readings newer than ``last_iso``.
+    """Return one ``{"iso", "state", "sum"}`` point per day the readings cover.
 
-    ``state`` is the meter index itself; ``sum`` is cumulative consumption,
-    advanced by the delta between consecutive readings so the Gas dashboard's
-    period diff (``sum[n] - sum[n-1]``) yields exactly the m³ read in between.
+    ``sum`` is cumulative consumption and ``state`` the meter index, both
+    interpolated linearly across the days between two readings: the gas a reading
+    reports was burnt over that whole period, so the Gas dashboard's period diff
+    (``sum[end] - sum[start]``) lands on the right calendar month instead of
+    crediting a whole month to one reading day.
 
-    The oldest reading of a fresh install has no predecessor, so it contributes
-    no consumption (its ``sum`` equals the starting total): how much gas passed
-    through the meter *before* that reading is not knowable from this API.
-
-    Readings already imported (``iso <= last_iso``) are skipped but still used
-    as the delta baseline for the first new one.
+    ``anchor_sum`` is the total already stored for the **oldest** reading in the
+    window; that reading itself therefore contributes no consumption. On a fresh
+    install it is ``0.0`` — how much gas passed through the meter before the first
+    reading is not knowable from this API.
     """
-    running = last_sum
-    prev_index: float | None = None
-    points: list[dict[str, Any]] = []
+    ordered = _one_reading_per_day(readings)
+    if not ordered:
+        return []
 
-    for entry in sorted(readings, key=lambda e: e["iso"]):
-        index = entry["index"]
-        if last_iso is not None and entry["iso"] <= last_iso:
-            prev_index = index
-            continue
-        if prev_index is not None:
-            # A meter that goes backwards means a replaced or rolled-over meter;
-            # clamp at zero rather than break the statistic's monotonic ``sum``.
-            running = round(running + max(index - prev_index, 0.0), 3)
-        points.append({"iso": entry["iso"], "state": index, "sum": running})
-        prev_index = index
+    first = ordered[0]
+    points: list[dict[str, Any]] = [
+        {"iso": first["iso"], "state": first["index"], "sum": round(anchor_sum, 3)}
+    ]
+    running = anchor_sum
+
+    for previous, entry in pairwise(ordered):
+        start = date.fromisoformat(previous["iso"])
+        span = (date.fromisoformat(entry["iso"]) - start).days
+        step_index = (entry["index"] - previous["index"]) / span
+        # A meter that goes backwards means a replaced or rolled-over meter; write
+        # the drop off rather than break the statistic's monotonic ``sum``. The
+        # ``state`` still follows the real index, so the series ends where the
+        # meter is.
+        step_sum = max(entry["index"] - previous["index"], 0.0) / span
+
+        for day in range(1, span + 1):
+            points.append(
+                {
+                    "iso": (start + timedelta(days=day)).isoformat(),
+                    "state": round(previous["index"] + step_index * day, 3),
+                    "sum": round(running + step_sum * day, 3),
+                }
+            )
+        running += step_sum * span
 
     return points
+
+
+def _one_reading_per_day(readings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sort readings oldest first, keeping the highest index per day.
+
+    The coordinator already collapses duplicate days, but the interpolation below
+    divides by the gap between consecutive readings, so a repeated day would be a
+    division by zero. Defend here rather than trust the caller.
+    """
+    highest: dict[str, dict[str, Any]] = {}
+    for entry in readings:
+        current = highest.get(entry["iso"])
+        if current is None or entry["index"] > current["index"]:
+            highest[entry["iso"]] = entry
+    return [highest[iso] for iso in sorted(highest)]
 
 
 def build_cost_points(
@@ -160,27 +195,30 @@ async def async_import_consumption_statistics(
     conversion_factor: float,
     invoices: list[dict[str, Any]] | None = None,
 ) -> None:
-    """Import new meter readings as this contract's volume and energy statistics.
+    """Import the meter readings as this contract's volume and energy statistics.
 
-    The two series are handled differently on purpose:
+    The three series are handled differently on purpose:
 
-    - **volume (m³)** is the source of truth and append-only, so history is never
-      rewritten and ``sum`` stays monotonic;
+    - **volume (m³)** is the source of truth. The window the portal returns is
+      rewritten wholesale (see ``build_statistic_points``) so consumption sits on
+      the days it was burnt; ``sum`` is anchored on what is already stored for the
+      oldest reading in that window, which keeps the series monotonic and leaves
+      history older than the window alone;
     - **energy (kWh)** is purely derived (``volume x conversion_factor``) and is
       therefore re-synced from the volume series on every poll. Correcting the
       factor then fixes the *whole* history instead of leaving the old factor baked
       into everything written before the change;
     - **cost** is appended from ``invoices`` (see ``build_cost_points``) so the Gas
-      dashboard can show money without a price entity.
+      dashboard can show money without a price entity. It stays dated at the close
+      of the period it bills: an invoice is a single event, not a daily accrual.
     """
     # The recorder is a declared dependency but must be imported lazily: the
     # module pulls in native deps that are intentionally absent from the unit
     # test environment (see tests/test_statistics.py, which covers the pure
     # ``build_statistic_points`` decision logic instead).
-    from homeassistant.components.recorder import get_instance
+    from homeassistant.components.recorder.models import StatisticData
     from homeassistant.components.recorder.statistics import (
         async_add_external_statistics,
-        get_last_statistics,
     )
 
     if not readings:
@@ -189,20 +227,11 @@ async def async_import_consumption_statistics(
     volume_id = statistic_id_for(contract_number)
     energy_id = energy_statistic_id_for(contract_number)
 
-    # --- 1. Volume: the source of truth, append-only ------------------------
-    last_stats = await get_instance(hass).async_add_executor_job(
-        get_last_statistics, hass, 1, volume_id, True, {"sum"}
-    )
-    stored = (last_stats.get(volume_id) or [None])[0]
-    if stored:
-        last_sum = float(stored.get("sum") or 0.0)
-        last_iso: str | None = _ts_to_local_iso(float(stored["start"]))
-    else:
-        last_sum = 0.0
-        last_iso = None
-
-    points = build_statistic_points(readings, last_iso, last_sum)
-    fresh = [
+    # --- 1. Volume: the source of truth, rewritten over the polled window ---
+    stored = await _async_read_series(hass, volume_id)
+    oldest_iso = min(entry["iso"] for entry in readings)
+    points = build_statistic_points(readings, _anchor_sum(stored, oldest_iso))
+    fresh: list[StatisticData] = [
         {
             "start": dt_util.start_of_local_day(date.fromisoformat(p["iso"])),
             "state": p["state"],
@@ -227,7 +256,7 @@ async def async_import_consumption_statistics(
     # leave the old factor baked into every point already written, i.e. a step in
     # the middle of the series that no amount of re-polling repairs.
     await _async_sync_energy_series(
-        hass, volume_id, energy_id, contract_number, conversion_factor, fresh
+        hass, energy_id, contract_number, conversion_factor, stored, fresh
     )
 
     # --- 3. Cost: what the supplier actually invoiced -----------------------
@@ -318,12 +347,58 @@ def _metadata(statistic_id: str, name: str, unit: str) -> Any:
     }
 
 
+async def _async_read_series(
+    hass: HomeAssistant, statistic_id: str
+) -> dict[float, tuple[float, float]]:
+    """Return the whole stored series as ``{epoch_seconds: (state, sum)}``.
+
+    Read once per poll and used twice: to anchor the volume series' running total
+    on what is already stored, and as the base the energy series is derived from.
+    """
+    from homeassistant.components.recorder import get_instance
+    from homeassistant.components.recorder.statistics import statistics_during_period
+
+    rows = await get_instance(hass).async_add_executor_job(
+        statistics_during_period,
+        hass,
+        dt_util.utc_from_timestamp(0),
+        None,
+        {statistic_id},
+        "day",
+        None,
+        {"state", "sum"},
+    )
+
+    series: dict[float, tuple[float, float]] = {}
+    for row in rows.get(statistic_id) or []:
+        state, total = row.get("state"), row.get("sum")
+        if state is not None and total is not None:
+            series[_as_seconds(row["start"])] = (float(state), float(total))
+    return series
+
+
+def _anchor_sum(stored: dict[float, tuple[float, float]], oldest_iso: str) -> float:
+    """Return the total already stored at ``oldest_iso``, else the last one before it.
+
+    The oldest reading the portal still returns contributes no consumption of its
+    own — either it is the very first reading ever (nothing before it is knowable)
+    or its delta was counted when it was imported, before it aged out of the
+    window. Either way the rewrite has to resume from the total stored *at* that
+    day, and never from zero, or a slid window would reset the series and the Gas
+    dashboard would render the reset as a spike.
+    """
+    earlier = [ts for ts in stored if _ts_to_local_iso(ts) <= oldest_iso]
+    if not earlier:
+        return 0.0
+    return stored[max(earlier)][1]
+
+
 async def _async_sync_energy_series(
     hass: HomeAssistant,
-    volume_id: str,
     energy_id: str,
     contract_number: str,
     conversion_factor: float,
+    stored_volume: dict[float, tuple[float, float]],
     fresh_volume: list[Any],
 ) -> None:
     """Mirror the volume statistic into the energy one at the current factor.
@@ -332,36 +407,20 @@ async def _async_sync_energy_series(
     with the same ``start``), which keeps ``energy == volume x factor`` true for
     every point rather than only for newly appended ones.
 
-    ``fresh_volume`` holds the points written moments ago in this same call. They
-    have to be merged in explicitly: ``async_add_external_statistics`` *queues* the
-    write on the recorder thread, so reading the volume series straight back would
-    miss them and leave the energy series a poll behind — empty on a fresh install.
+    ``fresh_volume`` holds the points written moments ago in this same call, and
+    has to be merged over ``stored_volume`` explicitly:
+    ``async_add_external_statistics`` *queues* the write on the recorder thread, so
+    the series read at the start of this poll cannot contain them — which would
+    leave the energy series a poll behind, and empty on a fresh install.
     """
-    from homeassistant.components.recorder import get_instance
     from homeassistant.components.recorder.models import StatisticData
     from homeassistant.components.recorder.statistics import (
         async_add_external_statistics,
-        statistics_during_period,
-    )
-
-    rows = await get_instance(hass).async_add_executor_job(
-        statistics_during_period,
-        hass,
-        dt_util.utc_from_timestamp(0),
-        None,
-        {volume_id},
-        "day",
-        None,
-        {"state", "sum"},
     )
 
     # Keyed by the point's instant so the just-written points win over any stored
     # row for the same day.
-    merged: dict[float, tuple[float, float]] = {}
-    for row in rows.get(volume_id) or []:
-        state, total = row.get("state"), row.get("sum")
-        if state is not None and total is not None:
-            merged[_as_seconds(row["start"])] = (float(state), float(total))
+    merged = dict(stored_volume)
     for point in fresh_volume:
         merged[point["start"].timestamp()] = (
             float(point["state"]),

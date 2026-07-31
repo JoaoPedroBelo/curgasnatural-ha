@@ -1,20 +1,18 @@
 # Test dependencies pinned to the OLDEST supported Home Assistant.
 #
-# This file exists so the "2024.3.0+" floor claimed in hacs.json and the README is
-# a verified fact rather than a guess: CI runs the whole suite against it as well as
+# This file exists so the "2024.3.0+" floor claimed in hacs.json and the README is a
+# verified fact rather than a guess: CI runs the whole suite against it as well as
 # against the current version in requirements-test.txt.
 #
 # Home Assistant 2024.3 still supports Python 3.11; 2025.1 requires 3.12+, which is
 # why the two CI jobs differ in interpreter as well as in Home Assistant.
 #
-# If a change needs an API newer than 2024.3, do not patch around it here — raise
-# the floor in hacs.json, the README and this file together, so the three never
-# disagree.
-pytest==8.0.2
-pytest-asyncio==0.23.5
+# As in requirements-test.txt, the pytest family is left to
+# pytest-homeassistant-custom-component to resolve.
+#
+# If a change needs an API newer than 2024.3, do not patch around it here — raise the
+# floor in hacs.json, the README and this file together, so the three never disagree.
 pytest-homeassistant-custom-component==0.13.109
-pytest-cov==4.1.0
-
 homeassistant==2024.3.3
 
 # Integration dependencies

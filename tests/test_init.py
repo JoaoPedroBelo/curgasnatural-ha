@@ -13,7 +13,7 @@ Every test that reads statistics back must call ``async_wait_recording_done`` fi
 assertions race the recorder — they pass on a fast machine and fail in CI.
 """
 
-from datetime import timedelta
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
@@ -192,6 +192,25 @@ async def test_one_device_named_after_the_supply_address(hass, mock_client):
     assert devices[0].manufacturer == "Lisboagás Comercialização, S.A."
 
 
+# The fixture's readings run 21-10-2025 -> 30-07-2026, and every day in between
+# carries a point (see statistics.build_statistic_points).
+FIXTURE_DAYS = (date(2026, 7, 30) - date(2025, 10, 21)).days + 1
+
+
+def sums_by_local_date(series: list[dict]) -> dict[date, float]:
+    """Index a recorder series by local calendar day.
+
+    ``statistics_during_period`` reports ``start`` in epoch seconds here (the
+    websocket API is the one that converts to milliseconds).
+    """
+    return {
+        dt_util.utc_from_timestamp(row["start"])
+        .astimezone(dt_util.DEFAULT_TIME_ZONE)
+        .date(): row["sum"]
+        for row in series
+    }
+
+
 async def test_consumption_statistic_is_imported(hass, mock_client):
     """The Gas dashboard source must exist after the first poll."""
     from homeassistant.components.recorder.statistics import statistics_during_period
@@ -213,11 +232,43 @@ async def test_consumption_statistic_is_imported(hass, mock_client):
 
     series = stats.get(statistic_id)
     assert series, f"no statistics under {statistic_id}: {list(stats)}"
-    # 4 distinct reading days in the fixture (two entries share 30-07).
-    assert len(series) == 4
+    # One point per day, so a month's gas is never credited to a single day.
+    assert len(series) == FIXTURE_DAYS
     # sum accumulates the deltas: 0, +100, +100, +20 -> 220 over the window.
     assert series[-1]["sum"] == pytest.approx(220.0)
     assert series[-1]["state"] == pytest.approx(320.0)
+
+
+async def test_a_month_only_carries_its_own_gas(hass, mock_client):
+    """Regression test at the HA level for the month-attribution bug.
+
+    Dating each reading's whole delta at the reading day made the Gas dashboard
+    report 31 m³ for July: the 28 m³ read on 11 July covered the 89 days since
+    13 April. Spread over those days, July keeps only its own share.
+    """
+    from homeassistant.components.recorder.statistics import statistics_during_period
+
+    await setup_entry(hass)
+    await async_wait_recording_done(hass)
+
+    statistic_id = statistic_id_for(TEST_CONTRACT_NUMBER)
+    stats = await hass.async_add_executor_job(
+        statistics_during_period,
+        hass,
+        dt_util.utc_from_timestamp(0),
+        None,
+        {statistic_id},
+        "day",
+        None,
+        {"sum"},
+    )
+    at = sums_by_local_date(stats[statistic_id])
+
+    july = at[date(2026, 7, 30)] - at[date(2026, 6, 30)]
+
+    # 11 of the 89 days of the 100 m³ reading fall in July, plus its own 20 m³.
+    assert july == pytest.approx(100.0 * 11 / 89 + 20.0, abs=1e-2)
+    assert july < 120.0
 
 
 async def test_a_second_poll_does_not_duplicate_statistics(hass, mock_client):
@@ -244,7 +295,7 @@ async def test_a_second_poll_does_not_duplicate_statistics(hass, mock_client):
     )
 
     series = stats[statistic_id]
-    assert len(series) == 4
+    assert len(series) == FIXTURE_DAYS
     assert series[-1]["sum"] == pytest.approx(220.0)
 
 
@@ -344,11 +395,13 @@ async def test_energy_statistic_is_imported_alongside_the_volume_one(hass, mock_
 
     assert set(stats) == {volume_id, energy_id}
     volume, energy = stats[volume_id], stats[energy_id]
-    assert len(energy) == len(volume) == 4
+    assert len(energy) == len(volume) == FIXTURE_DAYS
     # Every energy point is its volume point scaled by the configured factor.
+    # Tolerances are absolute: both series are rounded to 3 decimals, which a
+    # relative tolerance cannot express on the small daily values.
     for v, e in zip(volume, energy, strict=True):
-        assert e["sum"] == pytest.approx(v["sum"] * 11.20808, rel=1e-4)
-        assert e["state"] == pytest.approx(v["state"] * 11.20808, rel=1e-4)
+        assert e["sum"] == pytest.approx(v["sum"] * 11.20808, abs=1e-3)
+        assert e["state"] == pytest.approx(v["state"] * 11.20808, abs=1e-3)
     assert energy[-1]["sum"] == pytest.approx(220.0 * 11.20808, rel=1e-4)
 
 
@@ -430,7 +483,7 @@ async def test_correcting_the_factor_rewrites_the_whole_energy_history(
     # Every point, not just the last, now reflects the new factor.
     assert len(energy) == len(volume)
     for v, e in zip(volume, energy, strict=True):
-        assert e["sum"] == pytest.approx(v["sum"] * 12.5, rel=1e-6)
+        assert e["sum"] == pytest.approx(v["sum"] * 12.5, abs=1e-3)
     # And the volume series is untouched by the factor change.
     assert [v["sum"] for v in volume] == [v["sum"] for v in before[volume_id]]
 

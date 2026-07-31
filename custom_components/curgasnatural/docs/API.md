@@ -281,30 +281,36 @@ appears days later, and the distributor reads roughly monthly. A live
 `total_increasing` sensor would therefore attribute a whole month's gas to the
 poll hour.
 
-So `statistics.py` imports each reading as an hourly **external statistic**
-timestamped at that reading's **local midnight**, with `sum` advanced by the
-delta between consecutive readings. Consumption then lands on the day the meter
-was actually read. One bar per reading is all the resolution this API offers; the
-delta is deliberately *not* spread across the intervening days, because that
-would be invented detail.
+So `statistics.py` imports **one point per calendar day**, timestamped at that
+day's **local midnight**, with each reading's delta spread evenly across the days
+it covers.
+
+Dating the whole delta at the reading day was the first design, and it was wrong
+in a way that only shows on the dashboard: the Gas dashboard diffs the running
+`sum` at month boundaries, so a reading taken on 11 July credited ~30 days of gas
+— two thirds of it June's heating — entirely to July. An even daily split is an
+approximation, since gas use is not uniform, but a far smaller one than
+misattributing a month.
 
 ```mermaid
 flowchart TD
-    START([poll]) --> LAST{last stored<br/>statistic?}
-    LAST -->|yes| CONT["sum = last sum<br/>cursor = last day"]
-    LAST -->|no, fresh install| SEED["sum = 0<br/>cursor = none"]
-    CONT --> LOOP
-    SEED --> LOOP
-    LOOP{"for each reading<br/>(sorted, oldest first)"} -->|"iso ≤ cursor"| SKIP["skip,<br/>but keep as delta baseline"]
-    LOOP -->|"no predecessor"| BASE["point with sum unchanged<br/>(earlier gas is unknowable)"]
-    LOOP -->|new reading| ADD["sum += max(index - prev, 0)<br/>point @ local midnight"]
-    SKIP --> DONE
-    BASE --> DONE
-    ADD --> DONE([async_add_external_statistics])
+    START([poll]) --> READ["read the stored series once"]
+    READ --> ANCHOR["anchor sum = total already stored<br/>at the oldest reading in the window"]
+    ANCHOR --> LOOP{"for each pair of<br/>consecutive readings"}
+    LOOP --> SPLIT["delta / days = per-day step"]
+    SPLIT --> DAYS["one point per day:<br/>state interpolates the index,<br/>sum += step"]
+    DAYS --> LOOP
+    LOOP -->|window done| WRITE([async_add_external_statistics<br/>rewrites the whole window])
 ```
 
-Clamping the delta at zero keeps `sum` monotonic if a meter is ever replaced and
-the index restarts near zero.
+Clamping the per-day step at zero keeps `sum` monotonic if a meter is ever replaced
+and the index restarts near zero — `state` still follows the real index, so the
+series ends where the meter actually is.
+
+Anchoring on the total stored for the *oldest* reading in the window (rather than on
+the last point written) is what makes rewriting safe: history older than the ~400-day
+window the portal returns is never touched, and a window that slides forward cannot
+reset the series.
 
 > Credentials, tokens and the captured CUI/NIF/IBAN are per-account and must
 > never be committed. Use placeholders in tests and docs, as above.

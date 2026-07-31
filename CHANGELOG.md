@@ -50,7 +50,25 @@ The energy series is **derived from the volume series on every poll**, not
 accumulated alongside it. That is what makes correcting the factor repair the whole
 history: an independently accumulated series would keep the old factor baked into
 every point already written, leaving a step in the middle that re-polling never
-fixes. The volume series stays append-only, since it is the source of truth.
+fixes.
+
+### Changed — consumption is spread over the days it covers
+
+The first design dated each reading's whole delta at the reading day. That is wrong
+in a way only the dashboard reveals: the Gas dashboard diffs the running `sum` at
+month boundaries, so a reading taken on 11 July credited about 30 days of gas — two
+thirds of it June's heating — entirely to July.
+
+Statistics are now written as **one point per calendar day**, with each delta split
+evenly across the days between two readings and the meter index interpolated for
+`state`. The polled window is rewritten wholesale each time rather than appended to,
+anchored on the total already stored for its oldest reading, which also means a
+backdated reading arriving late repairs the days it covers instead of dumping its gas
+on the day it appeared.
+
+An even split is an approximation — gas use is not uniform — but a far smaller one
+than misattributing a month. The cost series is *not* split: an invoice is a single
+event, not a daily accrual, so it stays dated at the close of the period it bills.
 
 ### Added — cost from real invoices
 

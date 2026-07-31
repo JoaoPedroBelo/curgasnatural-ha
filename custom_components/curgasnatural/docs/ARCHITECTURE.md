@@ -101,7 +101,7 @@ The sensors above are **informative**. The Gas dashboard is instead fed by the
 
 | Statistic id | Unit | Maintained | For |
 |--------------|------|-----------|-----|
-| `curgasnatural:consumption_<contract>` | m³ | append-only | What the meter counted |
+| `curgasnatural:consumption_<contract>` | m³ | rewritten over the polled window | What the meter counted |
 | `curgasnatural:energy_<contract>` | kWh | derived from volume | What the supplier bills |
 | `curgasnatural:cost_<contract>` | currency | append-only | `stat_cost` for the Gas dashboard |
 
@@ -125,8 +125,29 @@ distributor reads roughly monthly. A live `total_increasing` sensor changes valu
 only at the poll hour, so the Gas dashboard (which derives consumption from
 hourly deltas) would pile a whole month's gas onto that one hour.
 
-Importing each reading as an hourly statistic timestamped at that reading's
-**local midnight** puts the consumption on the day the meter was actually read.
+Importing the readings as statistics timestamped at **local midnight** puts the
+consumption on the days it was burnt instead.
+
+### Why each reading's gas is spread over the days it covers
+
+A reading gives the meter index for one instant, but the consumption it implies
+belongs to the whole period since the previous reading. Dating the entire delta at
+the reading day made calendar months read wrong, because the Gas dashboard diffs
+`sum` at month boundaries: a reading taken on 11 July carried 30 days of gas, two
+thirds of it June's, so July reported 7 m³ where about 4 were actually burnt in
+July.
+
+So `build_statistic_points` writes **one point per calendar day** between two
+readings, splitting the delta evenly and interpolating the index. An even split is
+an approximation — gas use is not uniform — but a much smaller one than crediting
+June's heating to July, and the reading days themselves stay exact.
+
+That is why the volume series is **rewritten** over the polled window rather than
+appended to: `sum` is anchored on the total already stored for the oldest reading
+the portal still returns (`_anchor_sum`) and recomputed from there. History older
+than the window is left untouched, `sum` stays monotonic, and a backdated reading
+arriving late now repairs the days it covers instead of dumping its gas on the day
+it showed up.
 
 ## Polling schedule
 

@@ -1,20 +1,19 @@
-# Test dependencies for the CUR Gás Natural integration.
+# Test dependencies for the CUR Gás Natural integration — CURRENT Home Assistant.
 #
 # These are PINNED on purpose. `pytest-homeassistant-custom-component` ships a
 # snapshot of Home Assistant's own test harness, so it and `homeassistant` have to
-# move together — and with open ranges, CI resolves a different Home Assistant every
-# time it runs. That made local runs disagree with CI (a lingering-thread check
-# passed on one and failed on the other), which is worse than being a version behind.
+# move together — and with open ranges, CI resolved a different Home Assistant on
+# every run. That made local runs disagree with CI (a lingering-thread check passed
+# on one and failed on the other), which is worse than being a version behind.
+#
+# Only the anchor packages are pinned. pytest, pytest-asyncio and pytest-cov are
+# deliberately NOT pinned here: pytest-homeassistant-custom-component declares its
+# own compatible ranges for them, and pinning them separately just invents conflicts.
 #
 # To bump: raise pytest-homeassistant-custom-component, let it pull its matching
-# homeassistant, re-freeze the rest, and run the suite. `validate.yml` runs daily
-# against current HACS/hassfest, so drift there is still caught without pinning here.
-pytest==8.3.4
-pytest-asyncio==0.25.2
+# homeassistant, and run the suite. `validate.yml` runs daily against current
+# HACS/hassfest, so drift there is still caught without pinning it here.
 pytest-homeassistant-custom-component==0.13.205
-pytest-cov==6.0.0
-
-# Pulled in by pytest-homeassistant-custom-component; pinned so the pair is explicit.
 homeassistant==2025.1.4
 
 # Integration dependencies
