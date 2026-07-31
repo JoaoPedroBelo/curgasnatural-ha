@@ -55,8 +55,11 @@ coverage.xml
 *.pot
 
 # Environments
+# The glob matters: a bare `.venv` does not cover the throwaway venvs used to
+# reproduce a CI matrix job locally (`.venv-ci`, `.venv-min`, ...).
 .env
 .venv
+.venv*/
 env/
 venv/
 ENV/

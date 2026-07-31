@@ -188,7 +188,8 @@ class CurGasNaturalClient:
         csrf_field, csrf_token = await self._fetch_csrf()
         code = await self._submit_login(csrf_field, csrf_token)
         await self._exchange_code(code, verifier)
-        _LOGGER.debug("CUR Gás Natural login successful for %s", self._email)
+        # Deliberately without the e-mail: debug logs get pasted into bug reports.
+        _LOGGER.debug("CUR Gás Natural login successful")
 
     async def _start_authorization(self, challenge: str, state: str) -> None:
         """Open the authorization request so the server saves it and sets cookies.

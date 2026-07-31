@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The successful-login debug line no longer includes the account e-mail. Debug
+  logs get pasted into bug reports, and the e-mail added nothing to the message.
+- Every GitHub Action is pinned to a commit SHA instead of a moving tag, and
+  Dependabot now keeps those pins current. `hacs/action@main` and
+  `home-assistant/actions/hassfest@master` were the ones that mattered: a moving
+  ref runs whatever upstream publishes, in a job that holds `contents: write`.
+- `.gitignore` covers `.venv*/`, not just `.venv`, so a throwaway venv used to
+  reproduce a CI matrix job locally cannot be committed by accident.
+
 ## [0.2.0] - 2026-07-31
 
 ### Fixed — a month no longer reports the previous month's gas
