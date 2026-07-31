@@ -383,3 +383,80 @@ async def test_get_contract_info_returns_a_dict_even_on_a_odd_payload():
 
         assert await client.async_get_contract_info("contract-1") == {}
     await client.close()
+
+
+async def test_a_portal_outage_is_a_connection_error_not_an_auth_failure():
+    """A 5xx must not make Home Assistant ask for a password that was never wrong.
+
+    ConfigEntryAuthFailed unloads the entry and prompts for reauth with no retry,
+    while ConfigEntryNotReady retries with backoff. Classifying a maintenance
+    window as an auth failure therefore leaves the integration dead until someone
+    retypes their credentials by hand.
+    """
+    client = CurGasNaturalClient("user@example.pt", "secret")
+    with aioresponses() as mocked:
+        mocked.get(AUTHORIZE_URL, status=503, body="<html>maintenance</html>")
+
+        with pytest.raises(CurGasNaturalConnectionError, match="503"):
+            await client.async_login()
+    await client.close()
+
+
+async def test_a_4xx_on_authorize_is_still_an_auth_failure():
+    """The live 400 "No OAuth client related to request" must keep its meaning."""
+    client = CurGasNaturalClient("user@example.pt", "secret")
+    with aioresponses() as mocked:
+        mocked.get(AUTHORIZE_URL, status=400, body="no OAuth client")
+
+        with pytest.raises(CurGasNaturalAuthError, match="HTTP 400"):
+            await client.async_login()
+    await client.close()
+
+
+async def test_a_5xx_from_the_token_endpoint_is_a_connection_error():
+    client = CurGasNaturalClient("user@example.pt", "secret")
+    with aioresponses() as mocked:
+        mocked.get(AUTHORIZE_URL, status=302, headers={"Location": OAUTH_REDIRECT_URI})
+        mocked.get(CSRF_URL, payload={"parameterName": "_csrf", "token": "csrf-1"})
+        mocked.post(LOGIN_URL, status=302, headers={"Location": CODE_REDIRECT})
+        mocked.post(TOKEN_URL, status=502, body="bad gateway")
+
+        with pytest.raises(CurGasNaturalConnectionError, match="502"):
+            await client.async_login()
+    await client.close()
+
+
+async def test_a_400_from_the_token_endpoint_is_still_an_auth_failure():
+    """_ensure_token relies on this to fall back from refresh to a full login."""
+    client = CurGasNaturalClient("user@example.pt", "secret")
+    with aioresponses() as mocked:
+        mocked.get(AUTHORIZE_URL, status=302, headers={"Location": OAUTH_REDIRECT_URI})
+        mocked.get(CSRF_URL, payload={"parameterName": "_csrf", "token": "csrf-1"})
+        mocked.post(LOGIN_URL, status=302, headers={"Location": CODE_REDIRECT})
+        mocked.post(TOKEN_URL, status=400, payload={"error": "invalid_grant"})
+
+        with pytest.raises(CurGasNaturalAuthError, match="invalid_grant"):
+            await client.async_login()
+    await client.close()
+
+
+async def test_a_non_json_error_page_does_not_escape_as_a_decode_error():
+    """The CORS filter answers text/plain; json.JSONDecodeError is a ValueError.
+
+    Left unhandled it surfaced as "Unexpected error fetching curgasnatural data"
+    with a traceback every poll, and as "unknown" instead of "cannot_connect" in
+    the config flow.
+    """
+    client = CurGasNaturalClient("user@example.pt", "secret")
+    with aioresponses() as mocked:
+        mocked.get(AUTHORIZE_URL, status=302, headers={"Location": OAUTH_REDIRECT_URI})
+        mocked.get(
+            CSRF_URL,
+            status=403,
+            body="Invalid CORS request",
+            content_type="text/plain",
+        )
+
+        with pytest.raises(CurGasNaturalConnectionError):
+            await client.async_login()
+    await client.close()

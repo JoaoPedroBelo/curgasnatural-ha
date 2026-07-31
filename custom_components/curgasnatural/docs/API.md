@@ -218,17 +218,26 @@ fields are surfaced as entities; **none of it is ever logged**.
 
 ### `invoices` / `last-invoice`
 
+Both wrap the payload in an envelope, which is what the coordinator reads:
+`invoices` returns `{"invoices": [...]}` and `last-invoice` returns
+`{"lastInvoice": {...}}`. One entry looks like:
+
 ```json
-{"documentFiscalNumber": ["FT K0000/00000000000"],
- "documentNumber": ["000000000000"],
- "emissionDate": "2026-07-23T00:00:00+0000",
- "dueDate": "2026-08-17T00:00:00+0000",
- "startBillingPeriod": "2026-06-21T00:00:00+0000",
- "endBillingPeriod": "2026-07-20T00:00:00+0000",
- "paymentStatus": "PENDING_PAYMENT",
- "hasDirectDebit": true, "failedDirectDebit": false,
- "totalValue": "12.34", "toPayValue": "12.34"}
+{"invoices": [
+  {"documentFiscalNumber": ["FT K0000/00000000000"],
+   "documentNumber": ["000000000000"],
+   "emissionDate": "2026-07-23T00:00:00+0000",
+   "dueDate": "2026-08-17T00:00:00+0000",
+   "startBillingPeriod": "2026-06-21T00:00:00+0000",
+   "endBillingPeriod": "2026-07-20T00:00:00+0000",
+   "paymentStatus": "PENDING_PAYMENT",
+   "hasDirectDebit": true, "failedDirectDebit": false,
+   "totalValue": "7.82"}
+]}
 ```
+
+`last-invoice` carries the same fields plus `toPayValue`, under `lastInvoice`
+rather than in a list.
 
 - Amounts are **strings**; dates carry a meaningless midnight-UTC time and a
   `+0000` offset **without a colon**.

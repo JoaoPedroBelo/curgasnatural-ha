@@ -216,7 +216,17 @@ class CurGasNaturalClient:
             ) as resp:
                 if resp.status not in {302, 303}:
                     body = await resp.text()
-                    raise CurGasNaturalAuthError(
+                    # A 5xx is the portal being unavailable; only a 4xx says
+                    # anything about this client or its credentials. Reporting a
+                    # maintenance window as an auth failure makes Home Assistant
+                    # demand a password the user never got wrong, and — unlike
+                    # ConfigEntryNotReady — that path has no automatic retry.
+                    error = (
+                        CurGasNaturalConnectionError
+                        if resp.status >= 500
+                        else CurGasNaturalAuthError
+                    )
+                    raise error(
                         f"Authorization request returned HTTP {resp.status}: "
                         f"{body[:200]}"
                     )
@@ -232,7 +242,10 @@ class CurGasNaturalClient:
         try:
             async with session.get(url, headers=_XHR_HEADERS) as resp:
                 payload = await resp.json(content_type=None)
-        except (aiohttp.ClientError, TimeoutError) as err:
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            # ValueError covers json.JSONDecodeError: an error page served as
+            # text/plain (the CORS filter answers "Invalid CORS request" that way)
+            # would otherwise escape this class's exception hierarchy entirely.
             raise CurGasNaturalConnectionError(f"CSRF request failed: {err}") from err
 
         if not isinstance(payload, dict) or not payload.get("token"):
@@ -326,12 +339,20 @@ class CurGasNaturalClient:
                 data=payload,
                 headers=_FORM_HEADERS,
             ) as resp:
+                # Check the status before parsing: a 5xx typically answers with
+                # an HTML error page, and decoding that first would lose the code.
+                if resp.status >= 500:
+                    raise CurGasNaturalConnectionError(
+                        f"Token endpoint returned HTTP {resp.status}"
+                    )
                 body = await resp.json(content_type=None)
                 if resp.status >= 400:
+                    # A 400 invalid_grant must stay an auth error: _ensure_token
+                    # relies on it to fall back from refresh to a full login.
                     raise CurGasNaturalAuthError(
                         f"Token endpoint returned HTTP {resp.status}: {body}"
                     )
-        except (aiohttp.ClientError, TimeoutError) as err:
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             raise CurGasNaturalConnectionError(f"Token request failed: {err}") from err
 
         token = body.get("access_token") if isinstance(body, dict) else None
@@ -422,7 +443,7 @@ class CurGasNaturalClient:
                 json_body=json_body,
                 allow_retry=False,
             )
-        except (aiohttp.ClientError, TimeoutError) as err:
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             raise CurGasNaturalConnectionError(f"{path} request failed: {err}") from err
 
     # --- public API --------------------------------------------------------

@@ -144,7 +144,7 @@ no way to show money. It now publishes a third statistic,
 ### Verified
 
 Installed and exercised against a live Home Assistant **2026.7.4** and a real CUR
-account: config flow (login + contract picker), 13 entities, the imported statistic
+account: config flow (login + contract picker), 15 entities, the imported statistic
 (20 reading points, cumulative 131 m³), a second poll that does not double-count,
 entry reload and unload — with no errors, warnings or deprecations in the log.
 

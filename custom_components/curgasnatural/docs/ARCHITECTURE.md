@@ -5,7 +5,7 @@ CUR customer portal twice a day and reads its OCC v2 REST API — the same API t
 portal's own Angular front end uses.
 
 One config entry per **contract** (delivery point), so an account with several
-supplies gets one device, one entity set and its own pair of statistics.
+supplies gets one device, one entity set and its own three statistics.
 
 ## Component overview
 
@@ -97,7 +97,7 @@ sequenceDiagram
 
 The sensors above are **informative**. The Gas dashboard is instead fed by the
 **external statistics** imported from `readings` (see [`API.md`](API.md) and
-`statistics.py`), of which there are two per contract:
+`statistics.py`), of which there are three per contract:
 
 | Statistic id | Unit | Maintained | For |
 |--------------|------|-----------|-----|

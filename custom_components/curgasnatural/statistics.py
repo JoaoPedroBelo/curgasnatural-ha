@@ -33,7 +33,7 @@ Three series are published per contract:
 ===================================  =========  ==============================
 Series                               Unit       How it is maintained
 ===================================  =========  ==============================
-``consumption_<contract>``           m³         append-only, source of truth
+``consumption_<contract>``           m³         window rewritten, source of truth
 ``energy_<contract>``                kWh        derived from volume x factor
 ``cost_<contract>``                  currency   append-only, from invoices
 ===================================  =========  ==============================
