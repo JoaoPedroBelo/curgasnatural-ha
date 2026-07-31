@@ -5,18 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-07-31
 
-### Changed
+### Changed — the login debug line no longer carries your e-mail
 
-- The successful-login debug line no longer includes the account e-mail. Debug
-  logs get pasted into bug reports, and the e-mail added nothing to the message.
-- Every GitHub Action is pinned to a commit SHA instead of a moving tag, and
-  Dependabot now keeps those pins current. `hacs/action@main` and
-  `home-assistant/actions/hassfest@master` were the ones that mattered: a moving
-  ref runs whatever upstream publishes, in a job that holds `contents: write`.
-- `.gitignore` covers `.venv*/`, not just `.venv`, so a throwaway venv used to
-  reproduce a CI matrix job locally cannot be committed by accident.
+`api.py` logged `login successful for <e-mail>` at debug level. Debug logs are
+exactly what people paste into bug reports, and the address was not telling the
+reader anything the surrounding context did not. The line stays; the e-mail goes.
+
+Nothing else in the integration behaves differently — if you are on 0.2.0 and do
+not enable debug logging, this release changes nothing for you.
+
+### Security — every GitHub Action is pinned to a commit SHA
+
+The workflows used moving refs: `hacs/action@main` and
+`home-assistant/actions/hassfest@master`, plus major-version tags for the rest. A
+moving ref runs whatever upstream publishes at the moment the job starts, and
+`release.yml` runs with `contents: write`. All of them are now pinned to a commit
+SHA, with the human-readable version kept in a trailing comment.
+
+Pins rot, so Dependabot is configured for `github-actions` and will open a PR when
+an action publishes a new release. That is the part that makes pinning sustainable
+rather than a slow drift into unpatched actions.
+
+### Repository — history was rewritten on 31 July 2026
+
+The test fixtures and `docs/API.md` carried real readings and invoice amounts from
+the author's own account, and a throwaway virtualenv used to reproduce a CI matrix
+job locally had been committed by mistake. Both are gone from **every** commit, so
+`main`, `v0.1.0` and `v0.2.0` were force-pushed and the release archives rebuilt.
+
+The fixture values are now synthetic and deliberately arbitrary — every derived
+assertion was recomputed to match, so changing one in isolation will break tests
+across several files. Dates were left alone: they are load-bearing for the
+12-month invoice window and the statistics spreading.
+
+**If you cloned or forked before this date**, your history has diverged and you
+will need to re-clone. `.gitignore` now covers `.venv*/` rather than a bare
+`.venv`, which is what let the virtualenv slip through.
 
 ## [0.2.0] - 2026-07-31
 
@@ -139,4 +165,6 @@ this release:
   like `sensor.r_example_1_2_3_meter_index`. Documented, with the caveat that this
   puts the supply address into every entity ID.
 
+[0.2.1]: https://github.com/JoaoPedroBelo/curgasnatural-ha/releases/tag/v0.2.1
+[0.2.0]: https://github.com/JoaoPedroBelo/curgasnatural-ha/releases/tag/v0.2.0
 [0.1.0]: https://github.com/JoaoPedroBelo/curgasnatural-ha/releases/tag/v0.1.0
