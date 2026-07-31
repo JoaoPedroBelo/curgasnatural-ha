@@ -33,7 +33,7 @@ scraping.
   dashboard shows money that matches the bill
 - **📅 Next reading window**: the dates the distributor is expected to read
 - **🏠 Multi-contract**: one entry per delivery point, each with its own device
-  and statistic
+  and its own set of statistics
 - **🕐 Low-profile polling**: twice a day (02:00 & 14:00) — no tight loops
 - **🔐 No two-factor friction**: the portal does not challenge new sessions, so
   polling stays fully headless
@@ -94,9 +94,8 @@ entry, then refreshes automatically **twice a day (02:00 and 14:00 local time)**
 > The portal exposes a real cumulative meter index, but the readings are
 > **backdated and sparse** — a reading dated the 20th surfaces days later, and the
 > distributor reads roughly monthly. A live `total_increasing` sensor would pile a
-> whole month's gas onto the poll hour, so the **Gas dashboard is fed by the
-> `curgasnatural:consumption_<contract>` long-term statistic** instead, with each
-> reading timestamped at its own local midnight.
+> whole month's gas onto the poll hour, so the **Gas dashboard is fed by long-term
+> statistics** instead, with each reading timestamped at its own local midnight.
 
 ## ⚖️ m³ vs kWh: set your conversion factor
 
@@ -109,13 +108,14 @@ Services → CUR Gás Natural → Configure**. It defaults to `11.2`, which is c
 to the Portuguese networks' typical value but **not** exact for yours — copy the
 number from your invoice.
 
-Changing it applies to readings imported *afterwards*; already-imported statistics
-keep the factor that was in force when they were written.
+Correcting it later fixes the **whole** history: the kWh series is re-derived from
+the m³ series on every poll rather than accumulated alongside it, so there is no
+step left behind at the point of the change.
 
 ## 📊 Adding it to the Gas dashboard
 
 **Settings → Dashboards → Energy → Gas consumption → Add gas source**, then pick
-one of the two series this integration publishes:
+one of the two consumption series this integration publishes:
 
 | Statistic | Unit | Pick this when |
 |-----------|------|----------------|
@@ -234,7 +234,9 @@ automation:
 - **Architecture**: `DataUpdateCoordinator`; all network logic isolated in `api.py`
 - **Integration Type**: Service (Cloud Polling)
 - **Update Schedule**: Twice daily (02:00 / 14:00) plus once on startup
-- **Home Assistant**: Compatible with 2024.1.0+
+- **Home Assistant**: 2024.3.0+ — the test suite runs against 2024.3, and the
+  integration is exercised in anger on 2026.7. Older cores may well work but are
+  untested, so the floor states what has actually been run.
 
 ## 🤝 Contributing
 
