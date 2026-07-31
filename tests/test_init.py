@@ -6,6 +6,11 @@ statistic actually materialise — the class of failure (illegal device_class,
 recorder wiring, entity naming) that only shows up once HA is in the loop.
 
 The portal is mocked at the client boundary; nothing here touches the network.
+
+Every test that reads statistics back must call ``async_wait_recording_done`` first:
+``async_add_external_statistics`` *queues* the write on the recorder thread, and
+``hass.async_block_till_done()`` does not flush that queue. Skipping it makes the
+assertions race the recorder — they pass on a fast machine and fail in CI.
 """
 
 from datetime import timedelta
@@ -17,6 +22,9 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.components.recorder.common import (
+    async_wait_recording_done,
+)
 
 from custom_components.curgasnatural.const import (
     CONF_ADDRESS,
@@ -189,7 +197,7 @@ async def test_consumption_statistic_is_imported(hass, mock_client):
     from homeassistant.components.recorder.statistics import statistics_during_period
 
     await setup_entry(hass)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     statistic_id = statistic_id_for(TEST_CONTRACT_NUMBER)
     stats = await hass.async_add_executor_job(
@@ -217,11 +225,11 @@ async def test_a_second_poll_does_not_duplicate_statistics(hass, mock_client):
     from homeassistant.components.recorder.statistics import statistics_during_period
 
     await setup_entry(hass)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     coordinator = next(iter(hass.data[DOMAIN].values()))
     await coordinator.async_refresh()
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     statistic_id = statistic_id_for(TEST_CONTRACT_NUMBER)
     stats = await hass.async_add_executor_job(
@@ -319,7 +327,7 @@ async def test_energy_statistic_is_imported_alongside_the_volume_one(hass, mock_
     from homeassistant.components.recorder.statistics import statistics_during_period
 
     await setup_entry(hass)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     volume_id = statistic_id_for(TEST_CONTRACT_NUMBER)
     energy_id = energy_statistic_id_for(TEST_CONTRACT_NUMBER)
@@ -389,7 +397,7 @@ async def test_correcting_the_factor_rewrites_the_whole_energy_history(
     from homeassistant.components.recorder.statistics import statistics_during_period
 
     entry = await setup_entry(hass)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     energy_id = energy_statistic_id_for(TEST_CONTRACT_NUMBER)
     volume_id = statistic_id_for(TEST_CONTRACT_NUMBER)
@@ -414,6 +422,7 @@ async def test_correcting_the_factor_rewrites_the_whole_energy_history(
         entry, options={CONF_CONVERSION_FACTOR: 12.5}
     )
     await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     after = await series()
     energy, volume = after[energy_id], after[volume_id]
@@ -431,7 +440,7 @@ async def test_cost_statistic_is_imported_from_the_invoices(hass, mock_client):
     from homeassistant.components.recorder.statistics import statistics_during_period
 
     await setup_entry(hass)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     cost_id = cost_statistic_id_for(TEST_CONTRACT_NUMBER)
     stats = await hass.async_add_executor_job(
@@ -458,7 +467,7 @@ async def test_cost_statistic_is_registered_in_the_local_currency(hass, mock_cli
     from homeassistant.components.recorder.statistics import list_statistic_ids
 
     await setup_entry(hass)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     ids = await hass.async_add_executor_job(list_statistic_ids, hass)
     cost = next(
@@ -479,11 +488,11 @@ async def test_a_second_poll_does_not_duplicate_the_cost(hass, mock_client):
     from homeassistant.components.recorder.statistics import statistics_during_period
 
     await setup_entry(hass)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     coordinator = next(iter(hass.data[DOMAIN].values()))
     await coordinator.async_refresh()
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     cost_id = cost_statistic_id_for(TEST_CONTRACT_NUMBER)
     stats = await hass.async_add_executor_job(
