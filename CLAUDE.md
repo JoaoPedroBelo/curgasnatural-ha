@@ -25,7 +25,7 @@ changing the API client, coordinator, or entities:
 |------|---------|
 | `api.py` | **All portal network logic.** Private cookie jar, PKCE handshake, token refresh, OCC calls. |
 | `coordinator.py` | `DataUpdateCoordinator`; normalises the raw payloads into `self.data`. Twice-daily schedule. |
-| `statistics.py` | Imports each meter reading as the `curgasnatural:consumption_<contract>` external statistic (Gas dashboard source). |
+| `statistics.py` | Imports the meter readings as the `curgasnatural:consumption_<contract>` external statistic (Gas dashboard source), one point per day: each reading's delta is spread over the days it covers, so the polled window is rewritten, not appended to. |
 | `entity.py` | Shared entity base: unique ids and the per-contract device. |
 | `const.py` | `Final`-typed constants: config keys, hosts, endpoints, entity keys, `coordinator.data` keys, `POLL_HOURS`. |
 | `config_flow.py` / `__init__.py` | Config UI (live login + contract picker) / entry point. |
@@ -61,7 +61,9 @@ changing the API client, coordinator, or entities:
   invoice dates carry a `+0000` offset **without a colon**.
 - The distributor and the client can report the **same day** — collapse duplicates.
 - Readings are backdated and sparse, hence the statistic rather than a
-  `total_increasing` sensor.
+  `total_increasing` sensor — and hence the even daily split: the Gas dashboard
+  diffs `sum` at month boundaries, so dating a whole delta at the reading day put
+  the previous month's gas in the current one.
 
 ## Development
 
