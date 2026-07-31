@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "CUR Gás Natural Setup",
+        "description": "Sign in with your CUR Gás Natural customer portal account (portal.curgasnatural.pt). Data is refreshed twice a day (02:00 and 14:00).",
+        "data": {
+          "email": "E-mail",
+          "password": "Password"
+        }
+      },
+      "contract": {
+        "title": "Choose a contract",
+        "description": "Your account holds more than one contract. Pick the delivery point this entry should track — add the integration again for the others.",
+        "data": {
+          "contract_id": "Contract"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate CUR Gás Natural",
+        "description": "The stored password for {email} no longer works. Enter the current portal password to continue.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid e-mail or password",
+      "cannot_connect": "Failed to reach the CUR Gás Natural portal",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This contract is already configured",
+      "no_contracts": "This account has no contracts to track",
+      "unknown_contract": "That contract is no longer available",
+      "reauth_successful": "Re-authentication was successful"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "meter_index": {
+        "name": "Meter index"
+      },
+      "last_consumption": {
+        "name": "Consumption since previous reading"
+      },
+      "last_reading_date": {
+        "name": "Last reading date"
+      },
+      "next_reading_start": {
+        "name": "Next reading window start"
+      },
+      "next_reading_end": {
+        "name": "Next reading window end"
+      },
+      "last_invoice_total": {
+        "name": "Last invoice total"
+      },
+      "last_invoice_due": {
+        "name": "Last invoice due date"
+      },
+      "amount_due": {
+        "name": "Amount due"
+      },
+      "billed_12m": {
+        "name": "Billed last 12 months"
+      },
+      "contract_status": {
+        "name": "Contract status"
+      },
+      "meter_index_energy": {
+        "name": "Meter index (energy)"
+      },
+      "last_consumption_energy": {
+        "name": "Consumption since previous reading (energy)"
+      }
+    },
+    "binary_sensor": {
+      "invoice_pending": {
+        "name": "Invoice pending payment"
+      },
+      "direct_debit_failed": {
+        "name": "Direct debit failed"
+      },
+      "available": {
+        "name": "Service available"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Volume to energy conversion",
+        "description": "The meter counts m³ but your supplier bills kWh, using the network's conversion factor printed on every invoice next to the reading (e.g. \"4 m³ x 11.20808 = 45 kWh\"). Set it here so the energy sensors and the Gas dashboard's cost match your invoice.",
+        "data": {
+          "conversion_factor": "Conversion factor (kWh/m³)"
+        }
+      }
+    }
+  }
+}

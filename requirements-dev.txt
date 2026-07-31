@@ -1,0 +1,15 @@
+# Development dependencies for the CUR Gás Natural integration
+# Install: pip install -r requirements-dev.txt
+
+# Include test dependencies
+-r requirements-test.txt
+
+# Linting and formatting
+ruff>=0.8.0
+mypy>=1.7.0
+pre-commit>=3.5.0
+
+# Brand asset generation (make brand). cairosvg needs the cairo library:
+#   macOS: brew install cairo   |   Debian/Ubuntu: apt install libcairo2
+Pillow>=10.0.0
+cairosvg>=2.7.0

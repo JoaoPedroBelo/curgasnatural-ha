@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar CUR Gás Natural",
+        "description": "Inicie sessão com a sua conta do portal de cliente CUR Gás Natural (portal.curgasnatural.pt). Os dados são atualizados duas vezes por dia (02:00 e 14:00).",
+        "data": {
+          "email": "E-mail",
+          "password": "Palavra-passe"
+        }
+      },
+      "contract": {
+        "title": "Escolher contrato",
+        "description": "A sua conta tem mais do que um contrato. Escolha o ponto de entrega que esta entrada deve seguir — adicione a integração novamente para os restantes.",
+        "data": {
+          "contract_id": "Contrato"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reautenticar CUR Gás Natural",
+        "description": "A palavra-passe guardada para {email} já não funciona. Introduza a palavra-passe atual do portal para continuar.",
+        "data": {
+          "password": "Palavra-passe"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "E-mail ou palavra-passe inválidos",
+      "cannot_connect": "Não foi possível contactar o portal CUR Gás Natural",
+      "unknown": "Ocorreu um erro inesperado"
+    },
+    "abort": {
+      "already_configured": "Este contrato já está configurado",
+      "no_contracts": "Esta conta não tem contratos para seguir",
+      "unknown_contract": "Esse contrato já não está disponível",
+      "reauth_successful": "A reautenticação foi concluída com sucesso"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "meter_index": {
+        "name": "Leitura do contador"
+      },
+      "last_consumption": {
+        "name": "Consumo desde a leitura anterior"
+      },
+      "last_reading_date": {
+        "name": "Data da última leitura"
+      },
+      "next_reading_start": {
+        "name": "Início da próxima leitura"
+      },
+      "next_reading_end": {
+        "name": "Fim da próxima leitura"
+      },
+      "last_invoice_total": {
+        "name": "Total da última fatura"
+      },
+      "last_invoice_due": {
+        "name": "Data-limite de pagamento"
+      },
+      "amount_due": {
+        "name": "Valor em dívida"
+      },
+      "billed_12m": {
+        "name": "Faturado nos últimos 12 meses"
+      },
+      "contract_status": {
+        "name": "Estado do contrato"
+      },
+      "meter_index_energy": {
+        "name": "Leitura do contador (energia)"
+      },
+      "last_consumption_energy": {
+        "name": "Consumo desde a leitura anterior (energia)"
+      }
+    },
+    "binary_sensor": {
+      "invoice_pending": {
+        "name": "Fatura por pagar"
+      },
+      "direct_debit_failed": {
+        "name": "Débito direto falhou"
+      },
+      "available": {
+        "name": "Serviço disponível"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Conversão de volume em energia",
+        "description": "O contador conta m³ mas o comercializador fatura kWh, usando o fator de conversão da rede impresso em cada fatura ao lado da leitura (ex.: \"4 m³ x 11,20808 = 45 kWh\"). Defina-o aqui para que os sensores de energia e o custo no Gas dashboard batam com a sua fatura.",
+        "data": {
+          "conversion_factor": "Fator de conversão (kWh/m³)"
+        }
+      }
+    }
+  }
+}
