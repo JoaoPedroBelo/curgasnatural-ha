@@ -336,15 +336,41 @@ async def _async_import_cost_series(
 
 
 def _metadata(statistic_id: str, name: str, unit: str) -> Any:
-    """Build the metadata every series here shares."""
-    return {
-        "has_mean": False,
+    """Build the metadata every series here shares, in the running core's shape.
+
+    The metadata format moved under this integration's supported range:
+
+    - newer cores replace ``has_mean`` with ``mean_type`` and add ``unit_class``,
+      and warn that metadata without them stops importing in 2026.11;
+    - older cores build the database row with ``StatisticsMeta(**metadata)``, so
+      a key they do not know is a ``TypeError``.
+
+    So each field is sent only when the running core declares it.
+    """
+    from homeassistant.components.recorder.models import StatisticMetaData
+    from homeassistant.components.recorder.statistics import (
+        STATISTIC_UNIT_TO_UNIT_CONVERTER,
+    )
+
+    fields = StatisticMetaData.__annotations__
+    metadata: dict[str, Any] = {
         "has_sum": True,
         "name": name,
         "source": DOMAIN,
         "statistic_id": statistic_id,
         "unit_of_measurement": unit,
     }
+    if "mean_type" in fields:
+        from homeassistant.components.recorder.models import StatisticMeanType
+
+        metadata["mean_type"] = StatisticMeanType.NONE
+    else:
+        metadata["has_mean"] = False
+    if "unit_class" in fields:
+        # Derived the way the recorder itself derives it; ``None`` for a currency.
+        converter = STATISTIC_UNIT_TO_UNIT_CONVERTER.get(unit)
+        metadata["unit_class"] = converter.UNIT_CLASS if converter else None
+    return metadata
 
 
 async def _async_read_series(

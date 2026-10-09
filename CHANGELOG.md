@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed — statistics keep importing on Home Assistant 2026.11
+
+Home Assistant 2026.10 warns that external statistics whose metadata lacks
+`mean_type` and `unit_class` stop importing in 2026.11. The metadata now carries
+both on cores that declare them, and keeps the old `has_mean` shape on older cores,
+which build the database row with `StatisticsMeta(**metadata)` and reject unknown
+keys.
+
 ## [0.2.1] - 2026-07-31
 
 ### Changed — the login debug line no longer carries your e-mail

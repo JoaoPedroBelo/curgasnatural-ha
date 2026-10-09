@@ -12,6 +12,7 @@ import pytest
 
 from custom_components.curgasnatural.statistics import (
     _anchor_sum,
+    _metadata,
     _ts_to_local_iso,
     build_cost_points,
     build_statistic_points,
@@ -270,3 +271,50 @@ def test_the_three_statistic_ids_are_distinct():
     assert cost_statistic_id_for(contract) == (
         "curgasnatural:cost_34_00000000_00000000"
     )
+
+
+def test_metadata_uses_has_mean_on_a_core_without_mean_type():
+    """Older cores reject unknown keys: ``StatisticsMeta(**metadata)``."""
+    from homeassistant.components.recorder.models import StatisticMetaData
+
+    metadata = _metadata("curgasnatural:x", "X", "m³")
+
+    assert set(metadata) <= set(StatisticMetaData.__annotations__)
+    if "mean_type" not in StatisticMetaData.__annotations__:
+        assert metadata["has_mean"] is False
+
+
+def test_metadata_uses_mean_type_and_unit_class_on_a_newer_core(monkeypatch):
+    """Newer cores stop importing metadata without them (2026.11)."""
+    from enum import IntEnum
+
+    from homeassistant.components.recorder import models
+
+    class FakeMeanType(IntEnum):
+        NONE = 0
+
+    class NewerMetaData(dict):
+        __annotations__ = {
+            "mean_type": int,
+            "has_sum": bool,
+            "name": str,
+            "source": str,
+            "statistic_id": str,
+            "unit_class": str,
+            "unit_of_measurement": str,
+        }
+
+    monkeypatch.setattr(models, "StatisticMetaData", NewerMetaData)
+    monkeypatch.setattr(models, "StatisticMeanType", FakeMeanType, raising=False)
+
+    volume = _metadata("curgasnatural:v", "V", "m³")
+    energy = _metadata("curgasnatural:e", "E", "kWh")
+    cost = _metadata("curgasnatural:c", "C", "EUR")
+
+    assert "has_mean" not in volume
+    assert volume["mean_type"] is FakeMeanType.NONE
+    assert volume["unit_class"] == "volume"
+    assert energy["unit_class"] == "energy"
+    # A currency has no unit converter.
+    assert cost["unit_class"] is None
+    assert set(volume) == set(NewerMetaData.__annotations__)
