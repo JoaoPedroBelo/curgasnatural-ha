@@ -16,6 +16,10 @@
 pytest-homeassistant-custom-component==0.13.205
 homeassistant==2025.1.4
 
+# IANA zones incl. legacy links (US/Pacific, used by the HA test fixture);
+# Ubuntu 26.04 runners no longer ship them in the system tzdata
+tzdata>=2024.1
+
 # Integration dependencies
 aiohttp==3.11.11
 aioresponses==0.7.9
